@@ -10,8 +10,7 @@ using std::endl;
 using std::ofstream;
 using std::ios;
 
-#define PRIME 547
-// #define PRIME 5
+// #define PRIME 547
 
 static const int  __num_prime = 28;
 static const unsigned long __prime_list[__num_prime] = {
@@ -22,6 +21,14 @@ static const unsigned long __prime_list[__num_prime] = {
 	50331653,   100663319,    201326611,   402653189, 805306457, 
 	1610612741, 3221225473ul, 4294967291ul	
 };
+
+inline unsigned long __get_next_prime(unsigned long n)
+{
+	const unsigned long *first = __prime_list;
+	const unsigned long *last = __prime_list + __num_prime;
+	const unsigned long *pos = std::lower_bound(first,last,n);
+	return pos == last ? *(last - 1) : *pos;	
+}
 
 const char INFILE[] = "HashInt.txt";
 enum EntryType { ACTIVE, EMPTY, DELETED };
@@ -35,6 +42,7 @@ struct HashTbl
 
 class HashTable{
 	public:
+		HashTable(int n);
 		HashTable(); /* constructor initialize the hash table */
 		~HashTable(); /* destructor */
 
@@ -45,27 +53,33 @@ class HashTable{
 		void print();
 		void printFile();
 	private:
-		int size(); /* return the hash table size */
-		struct HashTbl hashEntry[PRIME];
+		int size(); 		/* return the number of elements */
+		int bucket(); 		/* return the size of hashtable */
+		struct HashTbl* hashEntry;
 		int hash(long n);	/* create hash value */
-		int hash_key(long n);
+		int next_size(int n)const;
+		void initialize_buckets(int n);
+
+		int num_elements; /* the size of actual elements. */
+		int num_buckets; /* the size of hashtable*/
 };
 
 void readFile(HashTable* hashTable, int line_num);
 
+
+HashTable::HashTable(int n)
+{
+	initialize_buckets(n);
+}
+
 HashTable::HashTable()
 {
-	for (int i = 0; i < PRIME; ++i)
-	{
-		hashEntry[i].next = NULL;
-		hashEntry[i].value = 0;
-		hashEntry[i].info = EMPTY;
-	}
+	initialize_buckets(5);
 }
 
 HashTable::~HashTable()
 {
-	for (int i = 0; i < PRIME; ++i)
+	for (int i = 0; i < num_buckets; ++i)
 	{
 		if(hashEntry[i].next!=NULL)
 		{
@@ -86,14 +100,38 @@ HashTable::~HashTable()
 	}
 }
 
-int HashTable::hash_key(long n)
+void HashTable::initialize_buckets(int n)
 {
-	return 1;
+	num_buckets = next_size(n);
+	hashEntry = new HashTbl[num_buckets];
+	for (int i = 0; i < num_buckets; ++i)
+	{
+		hashEntry[i].next = NULL;
+		hashEntry[i].value = 0;
+		hashEntry[i].info = EMPTY;
+	}	
 }
+
+int HashTable::next_size(int n)const
+{
+	return __get_next_prime(n);
+}
+
+int HashTable::size()
+{
+	return num_elements;
+}
+
+
+int HashTable::bucket()
+{
+	return num_buckets;
+}
+
 
 int HashTable::hash(long n)
 {
-	return n%PRIME;
+	return n % num_buckets;
 }
 
 void HashTable::addHashTblEntryLinkedList(long key)
@@ -122,7 +160,21 @@ void HashTable::addHashTblEntryLinkedList(long key)
 	}
 }
 
-
+void HashTable::addHashTblEntryOpenAddressing(long key)
+{
+	int start = hash(key);
+	for(int i=0; i<num_buckets; i++)
+	{
+		int index = hash(i+start);
+		if(hashEntry[index].info == EMPTY || hashEntry[index].info==DELETED)
+		{
+			hashEntry[index].value = key;
+			hashEntry[index].next = NULL;
+			hashEntry[index].info = ACTIVE;
+			return;
+		}
+	}
+}
 
 bool HashTable::lookup(long key)
 {
@@ -144,7 +196,7 @@ bool HashTable::lookup(long key)
 
 void HashTable::print()
 {
-	for(int i=0; i<PRIME; i++)
+	for(int i=0; i<num_buckets; i++)
 	{
 		if(hashEntry[i].next!=NULL)
 		{
@@ -167,7 +219,7 @@ void HashTable::printFile()
 {
 	ofstream myfile;
 	myfile.open ("output.txt", ios::out);
-	for(int i=0; i<PRIME; i++)
+	for(int i=0; i<num_buckets; i++)
 	{
 		if(hashEntry[i].next!=NULL)
 		{
@@ -181,7 +233,7 @@ void HashTable::printFile()
 			delete ptr;
 			ptr= NULL;
 		}else{
-			myfile << hashEntry[i].value << endl;
+			myfile << "[" << hashEntry[i].value <<": "<<hashEntry[i].info<<"]" << endl;
 		}
 	}
 	myfile.close();
@@ -190,8 +242,9 @@ void HashTable::printFile()
 
 int main()
 {
-	HashTable* hashTable = new HashTable();
-	readFile(hashTable, 1000);
+	int lineOfNum = 1000;
+	HashTable* hashTable = new HashTable(lineOfNum);
+	readFile(hashTable, lineOfNum);
 	// cout << "Hash Table size : " << hashTable.size() << endl;
 	// cout << "Hash Table bucket count : " << hashTable.bucket_count() << endl;
 	// cout << "Hash Table max bucket count : " << hashTable.max_bucket_count() << endl;
@@ -231,7 +284,7 @@ void readFile(HashTable* hashTable, int line_num)
 		int i=0;
 		while(i!=line_num && fgets(line, 10, fp))
 		{
-			hashTable->addHashTblEntryLinkedList(atoi(line));
+			hashTable->addHashTblEntryOpenAddressing(atoi(line));
 			i++;
 		}
 	}
